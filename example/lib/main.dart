@@ -1,548 +1,371 @@
-import 'dart:async';
-import 'dart:io' show Platform;
-import 'dart:math';
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
+import 'package:flutter_typeahead_example/checkout.dart';
+import 'package:flutter_typeahead_example/frame.dart';
+import 'package:flutter_typeahead_example/settings.dart';
+import 'package:flutter_typeahead_example/product.dart';
+import 'package:flutter_typeahead_example/options.dart';
 
-void main() => runApp(const MyApp());
+void main() => runApp(const App());
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+class App extends StatefulWidget {
+  const App({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<App> createState() => _AppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  bool isCupertino = !kIsWeb && Platform.isIOS;
+class _AppState extends State<App> {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialCupertinoFrame(
+      exampleBuilder: (context, controller, products, settings) =>
+          ExampleTypeAhead(
+        controller: controller,
+        products: products,
+        settings: settings,
+      ),
+      settingsBuilder: (context, controller, settings) => SettingsTypeAhead(
+        controller: controller,
+        settings: settings,
+      ),
+      cupertinoExampleBuilder: (context, controller, products, settings) =>
+          CupertinoExampleTypeAhead(
+        controller: controller,
+        products: products,
+        settings: settings,
+      ),
+      cupertinoSettingsBuilder: (context, controller, settings) =>
+          CupertinoSettingsTypeAhead(
+        controller: controller,
+        settings: settings,
+      ),
+    );
+  }
+}
+
+class ExampleTypeAhead extends StatelessWidget
+    with SharedExampleTypeAheadConfig {
+  ExampleTypeAhead({
+    super.key,
+    required this.controller,
+    required this.products,
+    required this.settings,
+  });
+
+  @override
+  final TextEditingController controller;
+  @override
+  final ProductController products;
+  @override
+  final FieldSettings settings;
 
   @override
   Widget build(BuildContext context) {
-    if (!isCupertino) {
-      return MaterialApp(
-        title: 'flutter_typeahead demo',
-        scrollBehavior: const MaterialScrollBehavior().copyWith(
-            dragDevices: {PointerDeviceKind.mouse, PointerDeviceKind.touch}),
-        home: DefaultTabController(
-          length: 5,
-          child: Scaffold(
-              appBar: AppBar(
-                leading: IconButton(
-                  icon: const Icon(Icons.phone_iphone),
-                  onPressed: () => setState(() {
-                    isCupertino = true;
-                  }),
+    return ValueListenableBuilder(
+      valueListenable: products,
+      builder: (context, value, child) {
+        return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: maybeReversed([
+              TypeAheadField<Product>(
+                direction: settings.direction.value,
+                controller: controller,
+                builder: (context, controller, focusNode) => TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  autofocus: true,
+                  style: DefaultTextStyle.of(context)
+                      .style
+                      .copyWith(fontStyle: FontStyle.italic),
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    hintText: hintText,
+                  ),
                 ),
-                title: TabBar(
-                  isScrollable: true,
-                  tabs: [
-                    Tab(text: 'Example 1: Navigation'),
-                    Tab(text: 'Example 2: Form'),
-                    Tab(text: 'Example 3: Scroll'),
-                    Tab(text: 'Example 4: Alternative Layout'),
-                    Tab(text: 'Example 5: Pull to load more')
+                decorationBuilder: (context, child) => Material(
+                  type: MaterialType.card,
+                  elevation: 4,
+                  borderRadius: borderRadius,
+                  child: child,
+                ),
+                itemBuilder: (context, product) => ListTile(
+                  title: Text(product.name),
+                  subtitle: product.description != null
+                      ? Text(
+                          '${product.description!} - \$${product.price}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : Text('\$${product.price}'),
+                ),
+                debounceDuration: debounceDuration,
+                hideOnSelect: settings.hideOnSelect.value,
+                hideOnUnfocus: settings.hideOnUnfocus.value,
+                hideWithKeyboard: settings.hideOnUnfocus.value,
+                retainOnLoading: settings.retainOnLoading.value,
+                onSelected: onSuggestionSelected,
+                suggestionsCallback: suggestionsCallback,
+                itemSeparatorBuilder: itemSeparatorBuilder,
+                listBuilder:
+                    settings.gridLayout.value ? gridLayoutBuilder : null,
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 32),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Text('Shopping Cart',
+                              style: Theme.of(context).textTheme.titleLarge),
+                          const Spacer(),
+                          Text(
+                            'Total: \$${products.total}',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          )
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (products.value.isNotEmpty)
+                      Expanded(
+                        child: ProductList(products: products),
+                      )
+                    else
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'Your cart is empty',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      )
                   ],
                 ),
               ),
-              body: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: TabBarView(children: [
-                  const NavigationExample(),
-                  const FormExample(),
-                  ScrollExample(),
-                  const AlternativeLayoutArchitecture(),
-                  const PullToLoadMorePage(),
-                ]),
-              )),
-        ),
-      );
-    } else {
-      return CupertinoApp(
-        title: 'Cupertino demo',
-        home: Scaffold(
-          appBar: CupertinoNavigationBar(
-            leading: IconButton(
-              icon: const Icon(Icons.android),
-              onPressed: () => setState(() {
-                isCupertino = false;
-              }),
-            ),
-            middle: const Text('Cupertino demo'),
-          ),
-          body: const CupertinoPageScaffold(
-            child: FavoriteCitiesPage(),
-          ),
-        ),
-      );
-    }
-  }
-}
-
-class NavigationExample extends StatelessWidget {
-  const NavigationExample({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        children: [
-          const SizedBox(height: 10.0),
-          TypeAheadField(
-            textFieldConfiguration: TextFieldConfiguration(
-              autofillHints: ["AutoFillHints 1", "AutoFillHints 2"],
-              autofocus: true,
-              style: DefaultTextStyle.of(context)
-                  .style
-                  .copyWith(fontStyle: FontStyle.italic),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'What are you looking for?',
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (context) => CheckoutDialog(products: products),
+                    ),
+                    child: const Text('Checkout'),
+                  ),
+                ],
               ),
-            ),
-            suggestionsCallback: (pattern) =>
-                BackendService.getSuggestions(pattern),
-            itemBuilder: (context, Map<String, String> suggestion) {
-              return ListTile(
-                leading: const Icon(Icons.shopping_cart),
-                title: Text(suggestion['name']!),
-                subtitle: Text('\$${suggestion['price']}'),
-              );
-            },
-            itemSeparatorBuilder: (context, index) => const Divider(height: 1),
-            onSuggestionSelected: (Map<String, String> suggestion) {
-              Navigator.of(context).push<void>(
-                MaterialPageRoute(
-                  builder: (context) => ProductPage(product: suggestion),
-                ),
-              );
-            },
-            suggestionsBoxDecoration: SuggestionsBoxDecoration(
-              borderRadius: BorderRadius.circular(10.0),
-              elevation: 8.0,
-              color: Theme.of(context).cardColor,
-            ),
+            ]),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
-class FormExample extends StatefulWidget {
-  const FormExample({super.key});
+class CupertinoExampleTypeAhead extends StatelessWidget
+    with SharedExampleTypeAheadConfig {
+  CupertinoExampleTypeAhead({
+    super.key,
+    required this.controller,
+    required this.products,
+    required this.settings,
+  });
 
   @override
-  State<FormExample> createState() => _FormExampleState();
-}
-
-class _FormExampleState extends State<FormExample> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController _typeAheadController = TextEditingController();
-
-  String? _selectedCity;
-
-  SuggestionsBoxController suggestionBoxController = SuggestionsBoxController();
+  final TextEditingController controller;
+  @override
+  final ProductController products;
+  @override
+  final FieldSettings settings;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      // close the suggestions box when the user taps outside of it
-      onTap: () => suggestionBoxController.close(),
-      child: Container(
-        // Add zero opacity to make the gesture detector work
-        color: Colors.amber.withOpacity(0),
-        // Create the form for the user to enter their favorite city
-        child: Form(
-          key: _formKey,
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              children: [
-                const Text('What is your favorite city?'),
-                TypeAheadFormField(
-                  textFieldConfiguration: TextFieldConfiguration(
-                    decoration: const InputDecoration(labelText: 'City'),
-                    controller: _typeAheadController,
-                  ),
-                  suggestionsCallback: (pattern) =>
-                      CitiesService.getSuggestions(pattern),
-                  itemBuilder: (context, suggestion) => ListTile(
-                    title: Text(suggestion),
-                  ),
-                  itemSeparatorBuilder: (context, index) => const Divider(),
-                  transitionBuilder: (context, suggestionsBox, controller) =>
-                      suggestionsBox,
-                  onSuggestionSelected: (suggestion) =>
-                      _typeAheadController.text = suggestion,
-                  suggestionsBoxController: suggestionBoxController,
-                  validator: (value) =>
-                      value!.isEmpty ? 'Please select a city' : null,
-                  onSaved: (value) => _selectedCity = value,
+    return ValueListenableBuilder(
+      valueListenable: products,
+      builder: (context, value, child) {
+        return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: maybeReversed([
+              CupertinoTypeAheadField<Product>(
+                direction: settings.direction.value,
+                builder: (context, controller, focusNode) => CupertinoTextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  autofocus: true,
+                  padding: const EdgeInsets.all(12),
+                  placeholder: hintText,
+                  placeholderStyle:
+                      CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                            color: CupertinoColors.placeholderText,
+                            fontStyle: FontStyle.italic,
+                          ),
                 ),
-                const Spacer(),
-                ElevatedButton(
-                  child: const Text('Submit'),
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      _formKey.currentState!.save();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Your Favorite City is $_selectedCity'),
-                        ),
-                      );
-                    }
-                  },
-                )
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ProductPage extends StatelessWidget {
-  const ProductPage({super.key, required this.product});
-
-  final Map<String, String> product;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(50.0),
-        child: Column(
-          children: [
-            Text(
-              product['name']!,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            Text(
-              '${product['price']!} USD',
-              style: Theme.of(context).textTheme.titleMedium,
-            )
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// This example shows how to use the [TypeAheadField] in a [ListView] that
-/// scrolls. The [TypeAheadField] will resize to fit the suggestions box when
-/// scrolling.
-class ScrollExample extends StatelessWidget {
-  ScrollExample({super.key});
-
-  final List<String> items = List.generate(50, (index) => "Item $index");
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(children: [
-      const Center(
-        child: Padding(
-          padding: EdgeInsets.all(8.0),
-          child: Text("Suggestion box will resize when scrolling"),
-        ),
-      ),
-      const SizedBox(height: 200),
-      TypeAheadField<String>(
-        getImmediateSuggestions: true,
-        textFieldConfiguration: const TextFieldConfiguration(
-          decoration: InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: 'What are you looking for?'),
-        ),
-        suggestionsCallback: (pattern) => items
-            .where((item) => item.toLowerCase().startsWith(
-                  pattern.toLowerCase(),
-                ))
-            .toList(),
-        itemBuilder: (context, suggestion) => ListTile(
-          title: Text(suggestion),
-        ),
-        itemSeparatorBuilder: (context, index) => const Divider(),
-        onSuggestionSelected: (suggestion) =>
-            ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Selected Item $suggestion'),
-          ),
-        ),
-      ),
-      const SizedBox(height: 500),
-    ]);
-  }
-}
-
-/// This is a fake service that mimics a backend service.
-/// It returns a list of suggestions after a 1 second delay.
-/// In a real app, this would be a service that makes a network request.
-class BackendService {
-  static Future<List<Map<String, String>>> getSuggestions(String query) async {
-    await Future<void>.delayed(const Duration(seconds: 1));
-
-    return List.generate(20, (index) {
-      return {
-        'name': query + index.toString(),
-        'price': Random().nextInt(100).toString()
-      };
-    });
-  }
-
-  static Future<List<Map<String, String>>> getPagedSuggestions(String query,
-      [int? page]) async {
-    await Future<void>.delayed(Duration(seconds: 1));
-    return List.generate(20, (index) {
-      return {
-        'name': query + index.toString(),
-        'price': Random().nextInt(100).toString()
-      };
-    });
-  }
-}
-
-/// A fake service to filter cities based on a query.
-class CitiesService {
-  static final List<String> cities = [
-    'Beirut',
-    'Damascus',
-    'San Fransisco',
-    'Rome',
-    'Los Angeles',
-    'Madrid',
-    'Bali',
-    'Barcelona',
-    'Paris',
-    'Bucharest',
-    'New York City',
-    'Philadelphia',
-    'Sydney',
-  ];
-
-  static List<String> getSuggestions(String query) {
-    List<String> matches = <String>[];
-    matches.addAll(cities);
-
-    matches.retainWhere((s) => s.toLowerCase().contains(query.toLowerCase()));
-    return matches;
-  }
-}
-
-class FavoriteCitiesPage extends StatefulWidget {
-  const FavoriteCitiesPage({super.key});
-
-  @override
-  State<FavoriteCitiesPage> createState() => _FavoriteCitiesPage();
-}
-
-class _FavoriteCitiesPage extends State<FavoriteCitiesPage> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController _typeAheadController = TextEditingController();
-  final CupertinoSuggestionsBoxController _suggestionsBoxController =
-      CupertinoSuggestionsBoxController();
-  String favoriteCity = 'Unavailable';
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _suggestionsBoxController.close,
-      child: Container(
-        color: Colors.amber.withOpacity(0),
-        child: Form(
-          key: _formKey,
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              children: [
-                const SizedBox(
-                  height: 100.0,
-                ),
-                const Text('What is your favorite city?'),
-                CupertinoTypeAheadFormField(
-                  getImmediateSuggestions: true,
-                  suggestionsBoxController: _suggestionsBoxController,
-                  suggestionsBoxDecoration: CupertinoSuggestionsBoxDecoration(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  textFieldConfiguration: CupertinoTextFieldConfiguration(
-                    controller: _typeAheadController,
-                  ),
-                  suggestionsCallback: (pattern, {int? page}) {
-                    return Future.delayed(
-                      const Duration(seconds: 1),
-                      () => CitiesService.getSuggestions(pattern),
-                    );
-                  },
-                  itemBuilder: (context, String suggestion) {
-                    return Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: Text(
-                        suggestion,
+                decorationBuilder: (context, child) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: CupertinoTheme.of(context)
+                        .barBackgroundColor
+                        .withOpacity(1),
+                    border: Border.all(
+                      color: CupertinoDynamicColor.resolve(
+                        CupertinoColors.systemGrey4,
+                        context,
                       ),
-                    );
-                  },
-                  itemSeparatorBuilder: (context, index) {
-                    return const Divider();
-                  },
-                  onSuggestionSelected: (String suggestion) {
-                    _typeAheadController.text = suggestion;
-                  },
-                  validator: (value) =>
-                      value!.isEmpty ? 'Please select a city' : null,
+                      width: 1,
+                    ),
+                    borderRadius: borderRadius,
+                  ),
+                  child: child,
                 ),
-                const SizedBox(
-                  height: 10.0,
+                itemBuilder: (context, product) => CupertinoListTile(
+                  title: Text(product.name),
+                  subtitle: product.description != null
+                      ? Text(
+                          '${product.description!} - \$${product.price}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : Text('\$${product.price}'),
                 ),
-                CupertinoButton(
-                  child: const Text('Submit'),
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      _formKey.currentState!.save();
-                      setState(() {
-                        favoriteCity = _typeAheadController.text;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(
-                  height: 10.0,
-                ),
-                Text(
-                  'Your favorite city is $favoriteCity!',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class AlternativeLayoutArchitecture extends StatelessWidget {
-  const AlternativeLayoutArchitecture({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        children: [
-          const SizedBox(
-            height: 10.0,
-          ),
-          TypeAheadField(
-            textFieldConfiguration: TextFieldConfiguration(
-              autofocus: true,
-              style: DefaultTextStyle.of(context)
-                  .style
-                  .copyWith(fontStyle: FontStyle.italic),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'What are you looking for?',
+                debounceDuration: debounceDuration,
+                hideOnSelect: settings.hideOnSelect.value,
+                hideOnUnfocus: settings.hideOnUnfocus.value,
+                hideWithKeyboard: settings.hideOnUnfocus.value,
+                retainOnLoading: settings.retainOnLoading.value,
+                onSelected: onSuggestionSelected,
+                suggestionsCallback: suggestionsCallback,
+                itemSeparatorBuilder: itemSeparatorBuilder,
+                listBuilder:
+                    settings.gridLayout.value ? gridLayoutBuilder : null,
               ),
-            ),
-            suggestionsCallback: (pattern) =>
-                BackendService.getSuggestions(pattern),
-            itemBuilder: (context, suggestion) => ListTile(
-              tileColor: Theme.of(context).colorScheme.secondaryContainer,
-              leading: const Icon(Icons.shopping_cart),
-              title: Text(suggestion['name']!),
-              subtitle: Text('\$${suggestion['price']}'),
-            ),
-            layoutArchitecture: (items, scrollContoller) => GridView.count(
-              controller: scrollContoller,
-              crossAxisCount: 2,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 5 / 5,
-              primary: false,
-              shrinkWrap: true,
-              children: items.toList(),
-            ),
-            onSuggestionSelected: (Map<String, String> suggestion) {
-              Navigator.of(context).push<void>(
-                MaterialPageRoute(
-                  builder: (context) => ProductPage(product: suggestion),
+              const SizedBox(height: 32),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Text('Shopping Cart',
+                        style: CupertinoTheme.of(context)
+                            .textTheme
+                            .textStyle
+                            .copyWith(fontSize: 24)),
+                    const Spacer(),
+                    Text(
+                      'Total: \$${products.total}',
+                      style: CupertinoTheme.of(context)
+                          .textTheme
+                          .textStyle
+                          .copyWith(fontSize: 18),
+                    )
+                  ],
                 ),
-              );
-            },
-            suggestionsBoxDecoration: SuggestionsBoxDecoration(
-              borderRadius: BorderRadius.circular(10.0),
-              elevation: 8.0,
-              color: Theme.of(context).cardColor,
-            ),
+              ),
+              const SizedBox(height: 8),
+              if (products.value.isNotEmpty)
+                Expanded(
+                  child: CupertinoProductList(products: products),
+                )
+              else
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      'Your cart is empty',
+                      style: CupertinoTheme.of(context)
+                          .textTheme
+                          .textStyle
+                          .copyWith(fontSize: 18),
+                    ),
+                  ),
+                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CupertinoButton(
+                    onPressed: () => showCupertinoDialog(
+                      context: context,
+                      builder: (context) =>
+                          CupertinoCheckoutDialog(products: products),
+                    ),
+                    child: const Text('Checkout'),
+                  ),
+                ],
+              ),
+            ]),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
-class PullToLoadMorePage extends StatefulWidget {
-  const PullToLoadMorePage({super.key});
-  @override
-  _PullToLoadMorePage createState() => _PullToLoadMorePage();
-}
+mixin SharedExampleTypeAheadConfig {
+  FieldSettings get settings;
+  ProductController get products;
+  TextEditingController get controller;
 
-class _PullToLoadMorePage extends State<PullToLoadMorePage> {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.all(32.0),
-      child: Column(
-        children: <Widget>[
-          SizedBox(
-            height: 10.0,
-          ),
-          TypeAheadField.paged(
-            textFieldConfiguration: TextFieldConfiguration(
-              autofillHints: ["AutoFillHints 1", "AutoFillHints 2"],
-              autofocus: true,
-              style: DefaultTextStyle.of(context)
-                  .style
-                  .copyWith(fontStyle: FontStyle.italic),
-              decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'What are you looking for?'),
-            ),
-            suggestionsLoadMoreCallback: (pattern, page) async {
-              return await BackendService.getPagedSuggestions(
-                  "page${page}_$pattern", page);
-            },
-            //minCharsForSuggestions: 2,
-            itemBuilder: (context, Map<String, String> suggestion) {
-              return ListTile(
-                leading: Icon(Icons.shopping_cart),
-                title: Text(suggestion['name']!),
-                subtitle: Text('\$${suggestion['price']}'),
-              );
-            },
-            itemSeparatorBuilder: (context, index) {
-              return Divider();
-            },
-            transitionBuilder: (context, suggestionsBox, controller) {
-              return suggestionsBox;
-            },
-            onSuggestionSelected: (Map<String, String> suggestion) {
-              Navigator.of(context).push<void>(MaterialPageRoute(
-                  builder: (context) => ProductPage(product: suggestion)));
-            },
-            suggestionsBoxDecoration: SuggestionsBoxDecoration(
-                borderRadius: BorderRadius.circular(10.0),
-                elevation: 8.0,
-                color: Theme.of(context).cardColor
-                //constraints: BoxConstraints(maxHeight: 200)
-                ),
-          ),
-        ],
+  final String hintText = 'What are you looking for?';
+  final BorderRadius borderRadius = BorderRadius.circular(10);
+  void onSuggestionSelected(Product product) {
+    products.value = Map.of(
+      products.value
+        ..update(
+          product,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        ),
+    );
+    controller.clear();
+  }
+
+  Future<List<Product>> suggestionsCallback(String pattern) async =>
+      Future<List<Product>>.delayed(
+        Duration(milliseconds: settings.loadingDelay.value ? 300 : 0),
+        () => allProducts.where((product) {
+          final nameLower = product.name.toLowerCase().split(' ').join('');
+          final patternLower = pattern.toLowerCase().split(' ').join('');
+          return nameLower.contains(patternLower);
+        }).toList(),
+      );
+
+  Widget itemSeparatorBuilder(BuildContext context, int index) =>
+      settings.dividers.value
+          ? const Divider(height: 1)
+          : const SizedBox.shrink();
+
+  List<Widget> maybeReversed(List<Widget> children) {
+    if (settings.direction.value == VerticalDirection.up) {
+      return children.reversed.toList();
+    }
+    return children;
+  }
+
+  Widget gridLayoutBuilder(
+    BuildContext context,
+    List<Widget> items,
+  ) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: items.length,
+      shrinkWrap: true,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 400,
+        mainAxisExtent: 58,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
       ),
+      reverse: SuggestionsController.of<Product>(context).effectiveDirection ==
+          VerticalDirection.up,
+      itemBuilder: (context, index) => items[index],
     );
   }
+
+  Duration get debounceDuration => settings.debounce.value
+      ? const Duration(milliseconds: 300)
+      : Duration.zero;
 }
